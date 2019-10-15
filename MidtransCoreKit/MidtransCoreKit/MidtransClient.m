@@ -92,10 +92,11 @@ NSString *const REGISTER_CARD_URL = @"card/register";
                                                     for (NSDictionary *response in json) {
                                                         MidtransBinResponse *binResponseObject = [[MidtransBinResponse alloc] initWithDictionary:response];
                                                         [contentData addObject:[binResponseObject dictionaryRepresentation]];
-                                                    }
-                                                    
+                                                    }                                    
                                                     if (completion) {
-                                                        completion(contentData,nil);
+                                                        dispatch_async(dispatch_get_main_queue(), ^{
+                                                            completion(contentData,nil);
+                                                        });
                                                     }
                                                     
                                                 }

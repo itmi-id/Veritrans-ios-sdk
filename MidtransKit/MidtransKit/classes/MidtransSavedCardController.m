@@ -24,6 +24,7 @@
 @property (nonatomic) MidtransSavedCardFooter *footerView;
 @property (nonatomic) NSArray *bankBinList;
 @property (nonatomic) MidtransPaymentRequestV2Response * responsePayment;
+@property (nonatomic) MTCreditCardPaymentType tokenType;
 @property (weak, nonatomic) IBOutlet UILabel *totalAmountLabel;
 @property (weak, nonatomic) IBOutlet UILabel *totalAmountText;
 @property (weak, nonatomic) IBOutlet MIdtransUIBorderedView *totalAmountBorderedView;
@@ -157,36 +158,50 @@
 }
 
 - (void)performOneClickWithCard:(MidtransMaskedCreditCard *)card {
-    if (self.responsePayment.transactionDetails.orderId) {
-        [[SNPUITrackingManager shared] trackEventName:@"btn confirm payment"
-                                 additionalParameters:@{@"order id":self.responsePayment.transactionDetails.orderId}];
-    }
-    
-    [[SNPUITrackingManager shared] trackEventName:@"btn confirm payment"];
-    VTConfirmPaymentController *vc = [[VTConfirmPaymentController alloc] initWithCardNumber:card.maskedNumber
-                                               grossAmount:self.token.transactionDetails.grossAmount];
-    
-    [vc showOnViewController:self.navigationController clickedButtonsCompletion:^(NSUInteger selectedIndex) {
-        if (selectedIndex == 1) {
-            [self showLoadingWithText:[VTClassHelper getTranslationFromAppBundleForString:@"Processing your transaction"]];
-            
-            MidtransPaymentCreditCard *paymentDetail = [MidtransPaymentCreditCard modelWithMaskedCard:card.maskedNumber customer:self.token.customerDetails saveCard:NO installment:nil];
-            MidtransTransaction *transaction =
-            [[MidtransTransaction alloc] initWithPaymentDetails:paymentDetail
-                                                          token:self.token];
-            
-            [[MidtransMerchantClient shared] performTransaction:transaction
-                                                     completion:^(MidtransTransactionResult *result, NSError *error) {
-                [self hideLoading];
-                
-                if (error) {
-                    [self handleTransactionError:error];
-                } else {
-                    [self handleTransactionSuccess:result];
-                }
-            }];
+    if(self.responsePayment.creditCard.installments.required) {
+        UIAlertController *alert = [UIAlertController
+                                    alertControllerWithTitle:@"ERROR"
+                                    message:[VTClassHelper getTranslationFromAppBundleForString:@"installment-on-one-click"]
+                                    preferredStyle:UIAlertControllerStyleAlert];
+        UIAlertAction *cancelButton = [UIAlertAction
+                                       actionWithTitle:[VTClassHelper getTranslationFromAppBundleForString:@"Close"]
+                                       style:UIAlertActionStyleDefault
+                                       handler:nil];
+        [alert addAction:cancelButton];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
+    } else {
+        if (self.responsePayment.transactionDetails.orderId) {
+            [[SNPUITrackingManager shared] trackEventName:@"btn confirm payment"
+                                     additionalParameters:@{@"order id":self.responsePayment.transactionDetails.orderId}];
         }
-    }];
+        
+        [[SNPUITrackingManager shared] trackEventName:@"btn confirm payment"];
+        VTConfirmPaymentController *vc = [[VTConfirmPaymentController alloc] initWithCardNumber:card.maskedNumber
+                                                   grossAmount:self.token.transactionDetails.grossAmount];
+        
+        [vc showOnViewController:self.navigationController clickedButtonsCompletion:^(NSUInteger selectedIndex) {
+            if (selectedIndex == 1) {
+                [self showLoadingWithText:[VTClassHelper getTranslationFromAppBundleForString:@"Processing your transaction"]];
+                
+                MidtransPaymentCreditCard *paymentDetail = [MidtransPaymentCreditCard modelWithMaskedCard:card.maskedNumber customer:self.token.customerDetails saveCard:NO installment:nil];
+                MidtransTransaction *transaction =
+                [[MidtransTransaction alloc] initWithPaymentDetails:paymentDetail
+                                                              token:self.token];
+                
+                [[MidtransMerchantClient shared] performTransaction:transaction
+                                                         completion:^(MidtransTransactionResult *result, NSError *error) {
+                    [self hideLoading];
+                    
+                    if (error) {
+                        [self handleTransactionError:error];
+                    } else {
+                        [self handleTransactionSuccess:result];
+                    }
+                }];
+            }
+        }];
+    }
 }
 
 - (void)performTwoClicksWithCard:(MidtransMaskedCreditCard *)card {
@@ -197,6 +212,7 @@
                                                     creditCard:self.creditCard
                                   andCompleteResponseOfPayment:self.responsePayment];
   //  vc.promos = self.promos;
+    vc.tokenType = self.tokenType;
     vc.currentMaskedCards = self.cards;
     vc.delegate = self;
     [self.navigationController pushViewController:vc animated:YES];
@@ -226,7 +242,17 @@
         [self performTwoClicksWithCard:card];
     }
     else {
-        if ([CC_CONFIG paymentType] == MTCreditCardPaymentTypeOneclick) {
+        NSString *tokenTypeString = [[self.responsePayment.creditCard.savedTokens valueForKey:@"tokenType"] objectAtIndex:indexPath.row];
+        
+        if ([tokenTypeString isEqualToString:@"one_click"]) {
+            self.tokenType = MTCreditCardPaymentTypeOneclick;
+        } else if ([tokenTypeString isEqualToString:@"two_clicks"]) {
+            self.tokenType = MTCreditCardPaymentTypeTwoclick;
+        } else {
+            self.tokenType = MTCreditCardPaymentTypeNormal;
+        }
+            
+        if (self.tokenType == MTCreditCardPaymentTypeOneclick) {
             [self performOneClickWithCard:card];
         }
         else {
@@ -262,47 +288,59 @@
 
 - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (editingStyle == UITableViewCellEditingStyleDelete) {
-        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:[VTClassHelper getTranslationFromAppBundleForString:@"alert.title"]
-                                                        message:[VTClassHelper getTranslationFromAppBundleForString:@"alert.message-delete-card"]
-                                                       delegate:self
-                                              cancelButtonTitle:[VTClassHelper getTranslationFromAppBundleForString:@"alert.no"]
-                                              otherButtonTitles:[VTClassHelper getTranslationFromAppBundleForString:@"alert.yes"], nil];
-        [alert setTag:indexPath.row];
-        [alert show];
+        
+        UIAlertController *alert = [UIAlertController
+                                    alertControllerWithTitle:[VTClassHelper getTranslationFromAppBundleForString:@"alert.title"]
+                                    message:[VTClassHelper getTranslationFromAppBundleForString:@"alert.message-delete-card"]
+                                    preferredStyle:UIAlertControllerStyleAlert];
+        UIAlertAction *noButton = [UIAlertAction
+                                   actionWithTitle:[VTClassHelper getTranslationFromAppBundleForString:@"alert.no"]
+                                   style:UIAlertActionStyleDefault
+                                   handler:nil];
+        UIAlertAction *yesButton = [UIAlertAction
+                                    actionWithTitle:[VTClassHelper getTranslationFromAppBundleForString:@"alert.yes"]
+                                    style:UIAlertActionStyleDefault
+                                    handler:^(UIAlertAction * action) {
+            [self confirmDeleteSavedCard:indexPath.row];
+        }];
+        [alert addAction:noButton];
+        [alert addAction:yesButton];
+        [self presentViewController:alert animated:YES completion:nil];
     }
 }
 
-#pragma mark - UIAlertViewDelegate
-
-- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
-    if (buttonIndex == 1) {
-        NSUInteger cardIndex = alertView.tag;
-        [self showLoadingWithText:nil];
-        if (CC_CONFIG.tokenStorageEnabled == YES) {
-            [self.cards removeObjectAtIndex:cardIndex];
-            [[MidtransMerchantClient shared] saveMaskedCards:self.cards
-                                                    customer:self.token.customerDetails
-                                                  completion:^(id  _Nullable result, NSError * _Nullable error) {
-                                                      [self hideLoading];
-                                                      [self reloadSavedCards];
-                                                  }];
-        } else {
-            MidtransMaskedCreditCard *maskedCard = self.cards[cardIndex];
-            [[MidtransMerchantClient shared] deleteMaskedCreditCard:maskedCard token:self.token completion:^(BOOL success) {
-                [self hideLoading];
-                
-                if (success == NO) {
-                    return;
-                }
-             [self.cards removeObjectAtIndex:cardIndex];
-                [self.tableView reloadData];
-    
+- (void)confirmDeleteSavedCard:(NSUInteger)cardIndex{
+    [self showLoadingWithText:nil];
+    if (CC_CONFIG.tokenStorageEnabled == YES) {
+        [self.cards removeObjectAtIndex:cardIndex];
+        [[MidtransMerchantClient shared] saveMaskedCards:self.cards
+                                                customer:self.token.customerDetails
+                                              completion:^(id  _Nullable result, NSError * _Nullable error) {
+            [self hideLoading];
+            [self reloadSavedCards];
+        }];
+    } else {
+        MidtransMaskedCreditCard *maskedCard = self.cards[cardIndex];
+        [[MidtransMerchantClient shared] deleteMaskedCreditCard:maskedCard token:self.token completion:^(BOOL success) {
+            [self hideLoading];
+            
+            if (success == NO) {
+                return;
+            }
+            
+            NSMutableArray *savedTokensM = self.creditCard.savedTokens.mutableCopy;
+            NSUInteger index = [savedTokensM indexOfObjectPassingTest:^BOOL(MidtransPaymentRequestV2SavedTokens *savedToken, NSUInteger idx, BOOL * _Nonnull stop) {
+                return [maskedCard.maskedNumber isEqualToString:savedToken.maskedCard];
             }];
-        }
-        
+            if (index != NSNotFound) {
+                [savedTokensM removeObjectAtIndex:index];
+            }
+            self.creditCard.savedTokens = savedTokensM;
+            [self.cards removeObjectAtIndex:cardIndex];
+            [self.tableView reloadData];
+            
+        }];
     }
-        
-       
 }
 
 #pragma mark - MidtransNewCreditCardViewControllerDelegate

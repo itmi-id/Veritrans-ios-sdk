@@ -73,6 +73,9 @@
         case MidtransPaymentFeatureIndomaret:
             paymentMethodSelected = MIDTRANS_PAYMENT_INDOMARET;
             break;
+        case MidtransPaymentFeatureAlfamart:
+            paymentMethodSelected = MIDTRANS_PAYMENT_ALFAMART;
+            break;
         case MidtransPyamentFeatureDanamonOnline:
             paymentMethodSelected = MIDTRANS_PAYMENT_DANAMON_ONLINE;
             break;
@@ -81,9 +84,6 @@
             break;
         case MidtransPaymentFeatureGCI:
             paymentMethodSelected = MIDTRANS_PAYMENT_GCI;
-            break;
-        case MidtransPaymentCreditCardForm:
-            paymentMethodSelected = MIDTRANS_CREDIT_CARD_FORM;
             break;
         case MidtransPaymentFeatureBRIEpay:
             paymentMethodSelected = MIDTRANS_PAYMENT_BRI_EPAY;

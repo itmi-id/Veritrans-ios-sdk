@@ -11,7 +11,7 @@
 #import "MidtransConstant.h"
 #import <WebKit/WebKit.h>
 
-@interface MidtransPaymentWebController () <WKNavigationDelegate, UIAlertViewDelegate>
+@interface MidtransPaymentWebController () <WKNavigationDelegate>
 @property (nonatomic) WKWebView *webView;
 @property (nonatomic) NSString *paymentIdentifier;
 @property (nonatomic, readwrite) MidtransTransactionResult *result;
@@ -48,7 +48,7 @@
         self.title = @"CIMB Clicks";
     }
     
-    //equal to uiwebview pageToFit, also disable zooming automatically//
+    //equal to pageToFit, also disable zooming automatically//
     NSString *source = [NSString stringWithFormat:@"var meta = document.createElement('meta');meta.name = 'viewport';meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';var head = document.getElementsByTagName('head')[0];head.appendChild(meta);"];
    
     WKUserScript *script = [[WKUserScript alloc]initWithSource:source injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:true];
@@ -78,13 +78,25 @@
 }
 
 - (void)closePressed:(id)sender {
-    
-    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"Confirm Navigation", nil)
-                                                    message:NSLocalizedString(@"Are you sure want to leave this page?", nil)
-                                                   delegate:self
-                                          cancelButtonTitle:NSLocalizedString(@"NO", nil)
-                                          otherButtonTitles:NSLocalizedString(@"YES", nil), nil];
-    [alert show];
+    UIAlertController *alert = [UIAlertController
+                                alertControllerWithTitle:NSLocalizedString(@"Confirm Navigation", nil)
+                                message:NSLocalizedString(@"Are you sure want to leave this page?", nil)
+                                preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction *noButton = [UIAlertAction
+                               actionWithTitle:NSLocalizedString(@"NO", nil)
+                               style:UIAlertActionStyleDefault
+                               handler:nil];
+    UIAlertAction *yesButton = [UIAlertAction
+                                actionWithTitle:NSLocalizedString(@"YES", nil)
+                                style:UIAlertActionStyleDefault
+                                handler:^(UIAlertAction * action) {
+        if ([self.delegate respondsToSelector:@selector(webPaymentController_transactionPending:)]) {
+            [self.delegate webPaymentController_transactionPending:self];
+        }
+    }];
+    [alert addAction:noButton];
+    [alert addAction:yesButton];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (NSError *)transactionError {
@@ -92,7 +104,7 @@
     return error;
 }
 
-#pragma mark - UIWebViewDelegate
+#pragma mark - WKNavigationDelegate
 
 - (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error{
     [[UIApplication sharedApplication] setNetworkActivityIndicatorVisible:NO];
@@ -126,15 +138,5 @@
         }
     }
     decisionHandler(WKNavigationActionPolicyAllow);
-}
-
-#pragma mark - UIAlertViewDelegate
-
-- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
-    if (buttonIndex == 1) {
-        if ([self.delegate respondsToSelector:@selector(webPaymentController_transactionPending:)]) {
-            [self.delegate webPaymentController_transactionPending:self];
-        }
-    }
 }
 @end

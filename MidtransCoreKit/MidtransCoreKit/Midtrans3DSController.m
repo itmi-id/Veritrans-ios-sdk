@@ -11,7 +11,7 @@
 #import "MidtransConstant.h"
 #import "MidtransMerchantClient.h"
 #import "MidtransTransaction.h"
-@interface Midtrans3DSController() <WKNavigationDelegate, UIAlertViewDelegate>
+@interface Midtrans3DSController() <WKNavigationDelegate>
 @property (nonatomic) NSURL *secureURL;
 @property (nonatomic) NSString *token;
 @property (nonatomic) UIViewController *rootViewController;
@@ -44,7 +44,7 @@
     self.title =self.titleOveride.length?self.titleOveride:NSLocalizedString(@"3D Secure", nil);
     self.title = @"Credit Card";
     
-    //equal to uiwebview pageToFit, also disable zooming automatically//
+    //equal to pageToFit, also disable zooming automatically//
     NSString *source = [NSString stringWithFormat:@"var meta = document.createElement('meta');meta.name = 'viewport';meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';var head = document.getElementsByTagName('head')[0];head.appendChild(meta);"];
     
     WKUserScript *script = [[WKUserScript alloc]initWithSource:source injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:true];
@@ -78,6 +78,7 @@
 
 - (void)showWithCompletion:(void(^)(NSError *error))completion {
     UINavigationController *nvc = [[UINavigationController alloc] initWithRootViewController:self];
+    nvc.modalPresentationStyle = UIModalPresentationFullScreen;
     [self.rootViewController presentViewController:nvc animated:YES completion:nil];
     self.completion = completion;
 }
@@ -89,7 +90,7 @@
     [self.webView evaluateJavaScript:jsCommand completionHandler:nil];
 }
 
-#pragma mark - UIWebViewDelegate
+#pragma mark - WKNavigationDelegate
 
 - (void)webView:(WKWebView *)webView didStartProvisionalNavigation:(WKNavigation *)navigation{
     [[UIApplication sharedApplication] setNetworkActivityIndicatorVisible:YES];
